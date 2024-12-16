@@ -1,2 +1,2 @@
-# RDF sensei
+# RDF sensei code
 
