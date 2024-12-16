@@ -1,0 +1,428 @@
+p, question, query
+https://sparql.rhea-db.org/.well-known/sparql-examples/14,"Select all Rhea reactions that have a given ChEBI ID as reaction participant"@en,"PREFIX CHEBI: <http://purl.obolibrary.org/obo/CHEBI_>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 14
+# Select all Rhea reactions that have CHEBI:29985 (L-glutamate) as reaction participant
+# 
+# This query corresponds to the Rhea website query:
+# https://www.rhea-db.org/rhea?query=chebi:29985
+SELECT distinct ?chebi ?rhea ?equation
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:equation ?equation .
+  ?rhea rh:side/rh:contains/rh:compound ?compound .
+  #
+  # the ChEBI can be used either as a small molecule, the reactive part of a macromolecule or as a polymer.
+  #
+  ?compound (rh:chebi|(rh:reactivePart/rh:chebi)|(rh:underlyingChebi/rh:chebi)) ?chebi .
+  VALUES (?chebi) { (CHEBI:29985) }
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/5,"Select all Rhea reactions mapped to KEGG reactions"@en,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 5 
+# Select all Rhea reactions mapped to KEGG reactions
+# KEGG reactions are mapped to Rhea bidirectional reactions
+# Rhea web query: https://www.rhea-db.org/rhea?query=kegg:*
+#
+SELECT ?rhea ?kegg ?rheaDir 
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:bidirectionalReaction ?rheaDir .
+  ?rheaDir rdfs:seeAlso ?kegg .
+  FILTER (regex(str(?kegg),'kegg'))
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/15,"Select all ChEBI compounds used in Rhea as reaction participant"@en,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX up: <http://purl.uniprot.org/core/>
+
+# Query 15
+# Select all ChEBI compounds used in Rhea as reaction participant
+# 
+# This query can not be expressed in the Rhea website
+SELECT ?chebi ?name (count(?rhea) as ?countRhea)
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:side/rh:contains/rh:compound ?compound .
+  #
+  # the ChEBI can be used either as a small molecule, the reactive part of a macromolecule or as a polymer.
+  #
+  ?compound (rh:chebi|(rh:reactivePart/rh:chebi)|(rh:underlyingChebi/rh:chebi)) ?chebi .
+  ?chebi up:name ?name .
+}
+GROUP BY ?chebi ?name
+ORDER BY DESC(?countRhea)"
+https://sparql.rhea-db.org/.well-known/sparql-examples/6,"Select all Rhea reactions mapped to MetaCyc reactions"@en,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 6 
+# Select all Rhea reactions mapped to MetaCyc reactions
+# MetaCyc reactions are mapped to either undirected, left-to-right, right-to-left or bidirectional reactions
+# Rhea web query: https://www.rhea-db.org/rhea?query=metacyc:*
+#
+SELECT distinct ?rhea ?rheaDir ?metacyc
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  {
+    ?rhea rdfs:seeAlso ?metacyc .
+    FILTER CONTAINS(str(?metacyc), "METACYC") 
+    BIND(?rhea as ?rheaDir)
+  }
+  UNION
+  {
+    ?rhea rh:directionalReaction ?directionalReaction .
+    ?directionalReaction rdfs:seeAlso ?metacyc . 
+    FILTER CONTAINS(str(?metacyc), "METACYC") 
+    BIND(?directionalReaction as ?rheaDir  )
+  }
+  UNION
+  {
+    ?rhea rh:bidirectionalReaction ?bidirectionalReaction .
+    ?bidirectionalReaction rdfs:seeAlso ?metacyc . 
+    FILTER CONTAINS(str(?metacyc), "METACYC") 
+    BIND(?bidirectionalReaction as ?rheaDir  )
+  }
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/search_chemical_names_in_japanese,"Search for Chemical names starting in Japanese, translated to english using allie"@en,"PREFIX oboInOwl: <http://www.geneontology.org/formats/oboInOwl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT
+*
+WHERE {
+SERVICE <https://data.allie.dbcls.jp/sparql>{
+        ?x rdfs:label "1,2,4-?????????"@ja ;
+            rdfs:label ?englishLabel .
+        FILTER(lang(?englishLabel) = "en")
+    }
+  BIND(STR(?englishLabel) AS ?englishLabelStr)
+  ?chebi rdfs:label|oboInOwl:hasSynonym ?englishLabelStr .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/10,"Select all Rhea reactions linked to an enzyme classification (sub)-class"@en,"PREFIX ec: <http://purl.uniprot.org/enzyme/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 10
+# Select all Rhea reactions mapped to 
+# 
+# This query corresponds to the Rhea website query:
+# https://www.rhea-db.org/rhea?query=ec:1.*
+# https://www.rhea-db.org/rhea?query=ec:1.1.*
+# https://www.rhea-db.org/rhea?query=ec:1.1.1.*
+#
+SELECT ?ec ?ecNumber ?rhea ?accession ?equation
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:accession ?accession .
+  ?rhea rh:ec ?ec .
+  BIND(strafter(str(?ec),str(ec:)) as ?ecNumber)
+  # class (e.g EC 1.-.-.-)
+  FILTER (regex(?ecNumber,'^1\\.')) 
+  # sub-class  (e.g EC 1.1.-.-)
+  #FILTER (regex(?ecNumber,'^1\\.1\\.')) 
+  # sub-sub-class (e.g EC 1.1.1.-)
+  #FILTER (regex(?ecNumber,'^1\\.1\\.1\\.')) 
+  ?rhea rh:equation ?equation .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/draft_human_metabolome,"Generate a draft human metabolome"@en,"PREFIX chebislash: <http://purl.obolibrary.org/obo/chebi/>
+PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX taxon: <http://purl.uniprot.org/taxonomy/>
+PREFIX up: <http://purl.uniprot.org/core/>
+
+SELECT
+  ?uniprot ?mnemonic ?rhea ?chebi ?smiles ?inchiKey
+WHERE
+{
+  ?rhea rh:side/rh:contains/rh:compound ?compound .
+  ?compound (rh:chebi|(rh:reactivePart/rh:chebi)|(rh:underlyingChebi/rh:chebi)) ?chebi .
+  ?chebi chebislash:smiles ?smiles ;
+          chebislash:inchikey ?inchiKey .
+  SERVICE <https://sparql.uniprot.org/sparql> {
+     ?uniprot up:annotation/up:catalyticActivity/up:catalyzedReaction ?rhea ;
+                                             up:organism taxon:9606 ;
+                                             up:mnemonic ?mnemonic .
+
+   }
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/1,"Select all Rhea reactions"@en,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 1
+# Select all Rhea reactions (unspecified direction) 
+# and return identifier (id), accession, boolean attributes (isChemicallyBalanced, isTransport) and chemical equation.
+#
+SELECT ?rhea ?id ?accession ?isChemicallyBalanced ?isTransport  ?equation 
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:id ?id .
+  ?rhea rh:accession ?accession .
+  ?rhea rh:equation ?equation .
+  ?rhea rh:isTransport ?isTransport .
+  ?rhea rh:isChemicallyBalanced ?isChemicallyBalanced .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/16,"Select all Rhea reactions that have a pair of ChEBI IDs as reaction participant and in opposite side"@en,"PREFIX CHEBI: <http://purl.obolibrary.org/obo/CHEBI_>
+PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX up: <http://purl.uniprot.org/core/>
+
+# Query 16
+# Select all Rhea reactions that have a pair of ChEBI IDs as reaction participant and in opposite side
+# Return Rhea reactions that have CHEBI:29985 (L-glutamate) as reaction participant in one side
+# and CHEBI:58359 (L-glutamine) in the other side
+#
+# This query cannot be expressed in the Rhea website
+SELECT ?chebi1 ?name1 ?chebi2 ?name2 ?rhea ?equation
+WHERE {
+  VALUES (?chebi1) { (CHEBI:29985) }
+  ?chebi1 up:name ?name1 .
+  ?rhea rh:side ?reactionSide1 .
+  ?reactionSide1  rh:contains / rh:compound / rh:chebi ?chebi1 .
+
+  VALUES (?chebi2) { (CHEBI:58359) }
+  ?chebi2 up:name ?name2 .
+
+  ?rhea rh:side ?reactionSide2 .
+  ?reactionSide2  rh:contains / rh:compound / rh:chebi ?chebi2 .
+  
+  ?reactionSide1 rh:transformableTo ?reactionSide2 .
+  
+  ?rhea rh:equation ?equation .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/7,"Select all Rhea reactions mapped to Reactome reactions"@en,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 7 
+# Select all Rhea reactions mapped to Reactome reactions
+# MetaCyc reactions are mapped to either undirected, left-to-right or right-to-left reactions
+# Rhea web query: https://www.rhea-db.org/rhea?query=reactome:*
+#    
+SELECT distinct ?rhea ?rheaDir ?reactome  
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  {
+    ?rhea rdfs:seeAlso ?reactome .
+    FILTER CONTAINS(str(?reactome), "reactome") 
+    BIND(?rhea as ?rheaDir)
+  }
+  UNION
+  {
+    ?rhea rh:directionalReaction ?directionalReaction .
+    ?directionalReaction rdfs:seeAlso ?reactome . 
+    FILTER CONTAINS(str(?reactome), "reactome") 
+    BIND(?directionalReaction as ?rheaDir  )
+  }
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/11,"Distribution of reactions according to the first class of the enzyme classification (federated query)"@en,"PREFIX ec: <http://purl.uniprot.org/enzyme/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+# Query 11
+# Retrieve the count of reactions mapped to each level (main class) of the enzyme classification
+#
+# This query mimics the Filter section of the Rhea website (Browse all reactions)
+# https://www.rhea-db.org/rhea?query=
+SELECT ?ecClass (STR(?ecName) AS ?ecClassName) (COUNT(?rhea) AS ?rheaCount)
+WHERE {
+  SERVICE <https://sparql.uniprot.org/sparql> {
+    VALUES (?ecClass) { (ec:1.-.-.-)(ec:2.-.-.-)(ec:3.-.-.-)(ec:4.-.-.-)(ec:5.-.-.-) (ec:6.-.-.-) (ec:7.-.-.-)}
+    ?ecNumber rdfs:subClassOf ?ecClass .
+    ?ecClass skos:prefLabel ?ecName .
+  }
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:ec ?ecNumber .
+} GROUP BY ?ecClass ?ecName"
+https://sparql.rhea-db.org/.well-known/sparql-examples/2,"Select all Rhea reactions annotated with a given Pubmed ID"@en,"PREFIX pubmed: <http://rdf.ncbi.nlm.nih.gov/pubmed/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 2 
+# Select all Rhea reactions annotated with a given Pubmed identifier (PMID = 29867142)
+#
+SELECT ?pubmed ?rhea ?accession ?isTransport  ?equation 
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:accession ?accession .
+  ?rhea rh:citation ?pubmed .
+  VALUES (?pubmed) { (pubmed:29867142) }
+  ?rhea rh:isTransport ?isTransport .
+  ?rhea rh:equation ?equation .
+} ORDER BY ?rhea"
+https://sparql.rhea-db.org/.well-known/sparql-examples/17,"Select all Rhea reactions that involve a lipid, i.e. children of CHEBI:18059 in the ChEBI hierarchy."@en,"PREFIX CHEBI: <http://purl.obolibrary.org/obo/CHEBI_>
+PREFIX chebihash: <http://purl.obolibrary.org/obo/chebi#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX up: <http://purl.uniprot.org/core/>
+
+# Query 17
+# Select all Rhea reactions that involve a lipid, i.e. children of CHEBI:18059 in the ChEBI hierarchy.
+# 
+# This query corresponds to the Rhea website query:
+# https://www.rhea-db.org/rhea?query=chebi:18059
+#
+SELECT distinct ?chebi ?name ?rhea ?equation
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:equation ?equation .
+  ?rhea rh:side/rh:contains/rh:compound ?compound .
+  #
+  # the ChEBI can be used either as a small molecule, the reactive part of a macromolecule or as a polymer.
+  #
+  { 
+    ?chebi rdfs:subClassOf* CHEBI:18059 . # lipid
+    ?compound (rh:chebi|(rh:reactivePart/rh:chebi)|(rh:underlyingChebi/rh:chebi)) ?chebi .
+  }
+  UNION 
+  { # add non-pH 7.3 species
+    ?not7_3 rdfs:subClassOf* CHEBI:18059 . # lipid
+    ?not7_3 rdfs:subClassOf ?chebiRestriction .
+    ?chebiRestriction a owl:Restriction .
+    ?chebiRestriction owl:onProperty chebihash:has_major_microspecies_at_pH_7_3 .
+    ?chebiRestriction owl:someValuesFrom ?chebi .
+    ?compound (rh:chebi|(rh:reactivePart/rh:chebi)|(rh:underlyingChebi/rh:chebi)) ?chebi .
+  }
+  ?chebi up:name ?name .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/8,"Select all Rhea reactions mapped to GO molecular functions"@en,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 8
+# Select all Rhea reactions mapped to GO molecular function
+# 
+# This query corresponds to the Rhea website query:
+# https://www.rhea-db.org/rhea?query=go:*
+#
+SELECT ?go ?rhea ?equation 
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rdfs:seeAlso ?go .
+  FILTER CONTAINS(str(?go), "GO_")   
+  ?rhea rh:equation ?equation .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/12,"Select all Rhea reactions linked to protein sequences (enzymes and transporters) in UniProtKB"@en,"PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX up: <http://purl.uniprot.org/core/>
+
+# Query 12
+# Select all Rhea reactions used to annotate enzyme sequences in UniProtKB
+# return the number of UniProtKB entries
+# Federated query using a service to UniProt SPARQL endpoint
+#
+# This query corresponds to the Rhea website query:
+# https://www.rhea-db.org/rhea?query=uniprot:*
+#
+SELECT ?uniprotCount ?rhea ?accession ?equation 
+WHERE {
+  SERVICE <https://sparql.uniprot.org/sparql> { 
+  	SELECT ?rhea (count(?uniprot) as ?uniprotCount) {
+      ?uniprot up:annotation/up:catalyticActivity/up:catalyzedReaction ?rhea . 
+  	}
+  	GROUP BY ?rhea
+  }
+  ?rhea rh:accession ?accession .
+  ?rhea rh:equation ?equation .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/3,"Select the specific form of <a href="https://www.rhea-db.org/rhea/11628">RHEA:11628</a>, a reaction that deals with general chemical classes (i.e. select the equivalent reactions involving instances of the chemical classes in <a href="https://www.rhea-db.org/rhea/11628">RHEA:11628</a>"^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML>,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 3
+# Select the specific form of RHEA:11628.
+# This query mimics the Related reactions sections of
+# https://www.rhea-db.org/rhea/11628
+#
+SELECT ?rhea  ?equation ?childrenRhea ?childrenEquation 
+WHERE {
+  VALUES (?rhea) {(rh:11628)}
+  ?rhea rh:equation ?equation .
+  ?childrenRhea rdfs:subClassOf+ ?rhea .
+  ?childrenRhea rh:equation ?childrenEquation .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/18,"Use <a href="https://idsm.elixir-czech.cz/sparql">IDSM Sachem</a> to find ChEBIs with a a <a href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:35516">Cholestane</a> skeleton (in SMILES). Then match returned ChEBIs to Rhea undirected reactions."^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML>,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX sachem: <http://bioinfo.uochb.cas.cz/rdf/v1.0/sachem#>
+
+
+SELECT 
+  ?rhea 
+  ?chebi
+WHERE {
+  SERVICE <https://idsm.elixir-czech.cz/sparql/endpoint/chebi> {
+    ?chebi sachem:substructureSearch [
+        sachem:query "[C@]12(CCC3CCCC[C@]3(C)[C@@]1([H])CC[C@]1(C)[C@@]([H])([C@@](C)([H])CCCC(C)C)CC[C@@]21[H])[H]" ].
+  }
+  ?rhea rh:side/rh:contains/rh:compound/rdfs:subClassOf ?chebi .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/9,"Select all Rhea reactions mapped to enzyme classification (EC numbers)"@en,"PREFIX ec: <http://purl.uniprot.org/enzyme/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 9
+# Select all Rhea reactions mapped to EC numbers (enzyme classification)
+#
+# This query corresponds to the Rhea website query:
+# https://www.rhea-db.org/rhea?query=ec:*
+#
+SELECT ?ec ?ecNumber ?rhea ?accession ?equation
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  ?rhea rh:accession ?accession .
+  ?rhea rh:ec ?ec .
+  BIND(strafter(str(?ec),str(ec:)) as ?ecNumber)
+  ?rhea rh:isTransport ?isTransport .
+  ?rhea rh:equation ?equation .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/13,"Select all Rhea reactions used in UniProtKB/Swiss-Prot for a given organism (NCBI taxonomy ID)."@en,"PREFIX rh: <http://rdf.rhea-db.org/>
+PREFIX taxon: <http://purl.uniprot.org/taxonomy/>
+PREFIX up: <http://purl.uniprot.org/core/>
+
+# Query 13
+# Select all Rhea reactions used to annotate Escherichia coli (taxid=83333) in UniProtKB/Swiss-Prot
+# return the number of UniProtKB entries
+# 
+# Federated query using a service to UniProt SPARQL endpoint
+#
+# This query cannot be performed using the Rhea search website
+SELECT ?uniprot ?mnemo ?rhea ?accession ?equation 
+WHERE {
+  SERVICE <https://sparql.uniprot.org/sparql> { 
+    VALUES (?taxid) { (taxon:83333) }
+    GRAPH <http://sparql.uniprot.org/uniprot> {
+      ?uniprot up:reviewed true . 
+      ?uniprot up:mnemonic ?mnemo . 
+      ?uniprot up:organism ?taxid .
+      ?uniprot up:annotation/up:catalyticActivity/up:catalyzedReaction ?rhea . 
+    }
+  }
+  ?rhea rh:accession ?accession .
+  ?rhea rh:equation ?equation .
+}"
+https://sparql.rhea-db.org/.well-known/sparql-examples/4,"Select all cross-references for a given reaction"@en,"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rh: <http://rdf.rhea-db.org/>
+
+# Query 4
+# Select all cross-references mapped to RHEA:21016
+# 
+# This query mimics the Cross-references section of 
+# https://www.rhea-db.org/rhea/21016
+#
+SELECT distinct ?rhea ?rheaDir ?xref 
+WHERE {
+  ?rhea rdfs:subClassOf rh:Reaction .
+  VALUES (?rhea) {(rh:21016)}
+  {
+    ?rhea rdfs:seeAlso ?xref .
+    BIND(?rhea as ?rheaDir)
+  }
+  UNION
+  {
+    ?rhea rh:directionalReaction ?directionalReaction .
+    ?directionalReaction rdfs:seeAlso ?xref . 
+    BIND(?directionalReaction as ?rheaDir  )
+  }
+  UNION
+  {
+    ?rhea rh:bidirectionalReaction ?bidirectionalReaction .
+    ?bidirectionalReaction rdfs:seeAlso ?xref . 
+    BIND(?bidirectionalReaction as ?rheaDir  )
+  }
+}"
